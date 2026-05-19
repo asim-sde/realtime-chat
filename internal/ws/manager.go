@@ -7,8 +7,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
-	"github.com/maang-prep/realtime-chat/internal/db"
-	redisclient "github.com/maang-prep/realtime-chat/internal/redis"
+	"github.com/redis/go-redis/v9"
 )
 
 var upgrader = websocket.Upgrader{
@@ -19,16 +18,25 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+type DBStore interface {
+	SaveMessage(ctx context.Context, senderID, receiverID, channelID, content string) error
+}
+
+type PubSubClient interface {
+	Publish(ctx context.Context, channel string, payload string) error
+	Subscribe(ctx context.Context, channel string) <-chan *redis.Message
+}
+
 type Manager struct {
 	Clients    map[string]*Client
 	Register   chan *Client
 	Unregister chan *Client
 	Broadcast  chan Message
-	db         *db.DB
-	pubsub     *redisclient.PubSub
+	db         DBStore
+	pubsub     PubSubClient
 }
 
-func NewManager(db *db.DB, pubsub *redisclient.PubSub) *Manager {
+func NewManager(db DBStore, pubsub PubSubClient) *Manager {
 	return &Manager{
 		Clients:    make(map[string]*Client),
 		Register:   make(chan *Client),
